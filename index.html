@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kelas 5B SDN 1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <aside class="w-72 bg-white shadow-2xl flex flex-col h-full z-20">
+            <div class="p-6 border-b bg-indigo-600 text-white text-center">
+                <h1 class="font-black text-xl tracking-tight">KELAS 5B</h1>
+                <p class="text-xs font-bold opacity-80">SD NEGERI 1</p>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1 overflow-y-auto mt-4">
+                <button onclick="showSection('dashboard')" id="btn-dashboard" class="nav-link active">📊 Dashboard</button>
+                <button onclick="showSection('siswa')" id="btn-siswa" class="nav-link">👨‍🎓 Data Siswa</button>
+                <button onclick="showSection('absensi')" id="btn-absensi" class="nav-link">📋 Absensi</button>
+                <button onclick="showSection('nilai')" id="btn-nilai" class="nav-link">📝 Daftar Nilai</button>
+                <button onclick="showSection('prestasi')" id="btn-prestasi" class="nav-link">🏆 Prestasi & Disiplin</button>
+                <button onclick="showSection('jurnal')" id="btn-jurnal" class="nav-link">📓 Jurnal Harian</button>
+            </nav>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-8">
+            
+            <div class="flex justify-between items-center mb-8">
+                <h2 id="section-title" class="text-3xl font-black text-slate-800 uppercase tracking-tight">Dashboard</h2>
+                <div id="action-buttons" class="flex gap-3">
+                    </div>
+            </div>
+
+            <hr class="mb-8 border-slate-200">
+
+            <div id="content-area">
+                </div>
+        </main>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h3 id="modal-title" class="text-2xl font-black text-slate-800 mb-6">Input Data</h3>
+            <div id="modal-form" class="space-y-4"></div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 py-3 font-bold text-slate-400">Batal</button>
+                <button id="btn-simpan" class="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">Simpan Data</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DATABASE INITIALIZATION
+        let db = JSON.parse(localStorage.getItem('db_kelas5b_revisi')) || {
+            siswa: [], absensi: [], nilai: [], prestasi: [], jurnal: []
+        };
+
+        const sections = {
+            dashboard: { title: "📊 Ringkasan Kelas", color: "indigo" },
+            siswa: { title: "👨‍🎓 Data Siswa", color: "indigo" },
+            absensi: { title: "📋 Rekap Absensi", color: "emerald" },
+            nilai: { title: "📝 Daftar Nilai", color: "purple" },
+            prestasi: { title: "🏆 Prestasi & Disiplin", color: "amber" },
+            jurnal: { title: "📓 Jurnal Harian", color: "slate" }
+        };
+
+        function showSection(id) {
+            // Update UI Navigasi
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            document.getElementById(`btn-${id}`).classList.add('active');
+            
+            // Update Header
+            document.getElementById('section-title').innerText = sections[id].title;
+            
+            // Update Tombol Aksi
+            const btnArea = document.getElementById('action-buttons');
+            btnArea.innerHTML = id === 'dashboard' ? '' : `
+                <button onclick="eksporExcel('${id}')" class="btn-ekspor">📥 Ekspor Excel</button>
+                <button onclick="openModal('${id}')" class="btn-tambah">+ Tambah Data</button>
+            `;
+
+            renderContent(id);
+        }
+
+        function renderContent(id) {
+            const container = document.getElementById('content-area');
+            
+            if (id === 'dashboard') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="stat-card">
+                            <p class="text-xs font-bold text-slate-400 uppercase">Total Siswa</p>
+                            <h4 class="text-4xl font-black text-indigo-600">${db.siswa.length}</h4>
+                        </div>
+                        <div class="stat-card">
+                            <p class="text-xs font-bold text-slate-400 uppercase">Catatan Absensi</p>
+                            <h4 class="text-4xl font-black text-emerald-600">${db.absensi.length}</h4>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Render Tabel untuk Siswa, Absensi, Nilai
+            if (['siswa', 'absensi', 'nilai'].includes(id)) {
+                let tableHeader = id === 'siswa' ? '<tr><th class="p-4">Nama</th><th class="p-4">NIS</th>' :
+                                  id === 'absensi' ? '<tr><th class="p-4">Tgl</th><th class="p-4">Nama</th><th class="p-4">Status</th>' :
+                                  '<tr><th class="p-4">Nama</th><th class="p-4">Mapel</th><th class="p-4">Nilai</th>';
+                
+                tableHeader += '<th class="p-4 text-center">Aksi</th></tr>';
+
+                let rows = db[id].map((item, idx) => {
+                    let cols = Object.values(item).map(v => `<td class="p-4 text-slate-600">${v}</td>`).join('');
+                    return `<tr class="border-b hover:bg-slate-50">${cols}<td class="p-4 text-center"><button onclick="hapusData('${id}', ${idx})" class="text-red-400 font-bold">Hapus</button></td></tr>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+                        <table class="w-full text-left">${tableHeader}<tbody>${rows || '<tr><td colspan="4" class="p-10 text-center text-slate-400 italic">Belum ada data.</td></tr>'}</tbody></table>
+                    </div>
+                `;
+            } else {
+                // Render Card untuk Prestasi & Jurnal
+                let cards = db[id].map((item, idx) => `
+                    <div class="bg-white p-6 rounded-2xl border shadow-sm relative">
+                        <button onclick="hapusData('${id}', ${idx})" class="absolute top-4 right-4 text-slate-300 hover:text-red-500">✕</button>
+                        ${Object.entries(item).map(([k, v]) => `<p class="mb-1"><strong>${k.toUpperCase()}:</strong> ${v}</p>`).join('')}
+                    </div>
+                `).join('');
+                container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${cards || '<p class="text-slate-400 italic">Data kosong.</p>'}</div>`;
+            }
+        }
+
+        // MODAL LOGIC
+        function openModal(type) {
+            const form = document.getElementById('modal-form');
+            form.innerHTML = '';
+            
+            const fields = {
+                siswa: [{n:'Nama', id:'f1'}, {n:'NIS', id:'f2'}],
+                absensi: [{n:'Tanggal', id:'f1', t:'date'}, {n:'Nama', id:'f2'}, {n:'Status', id:'f3', s:['Hadir','Izin','Sakit','Alfa']}],
+                nilai: [{n:'Nama', id:'f1'}, {n:'Mapel', id:'f2'}, {n:'Nilai', id:'f3', t:'number'}],
+                prestasi: [{n:'Nama Siswa', id:'f1'}, {n:'Keterangan', id:'f2', area:true}],
+                jurnal: [{n:'Tanggal', id:'f1', t:'date'}, {n:'Kegiatan', id:'f2', area:true}]
+            };
+
+            fields[type].forEach(f => {
+                form.innerHTML += `<label class="text-xs font-bold text-slate-400 uppercase ml-1">${f.n}</label>`;
+                if(f.s) {
+                    form.innerHTML += `<select id="${f.id}" class="input-field">${f.s.map(o => `<option>${o}</option>`).join('')}</select>`;
+                } else if(f.area) {
+                    form.innerHTML += `<textarea id="${f.id}" class="input-field" rows="3"></textarea>`;
+                } else {
+                    form.innerHTML += `<input id="${f.id}" type="${f.t || 'text'}" class="input-field">`;
+                }
+            });
+
+            document.getElementById('btn-simpan').onclick = () => {
+                let newData = {};
+                fields[type].forEach(f => newData[f.n.toLowerCase()] = document.getElementById(f.id).value);
+                db[type].push(newData);
+                saveDB();
+                closeModal();
+                renderContent(type);
+            };
+
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        function saveDB() { localStorage.setItem('db_kelas5b_revisi', JSON.stringify(db)); }
+
+        function hapusData(type, idx) {
+            if(confirm('Hapus data ini?')) {
+                db[type].splice(idx, 1);
+                saveDB();
+                renderContent(type);
+            }
+        }
+
+        function eksporExcel(type) {
+            const data = db[type];
+            if (!data.length) return alert("Data kosong!");
+            const csvRows = [Object.keys(data[0]).join(','), ...data.map(row => Object.values(row).map(v => `"${v}"`).join(','))];
+            const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${type}_5B.csv`; a.click();
+        }
+
+        // Start
+        showSection('dashboard');
+    </script>
+</body>
+</html>
